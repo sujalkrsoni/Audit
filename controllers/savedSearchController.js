@@ -3,12 +3,17 @@ import SavedSearch from "../models/SavedSearch.js";
 
 export async function createOrUpdateSavedSearch(req, res, next) {
   try {
-    // ✅ Use validatedBody (guaranteed by validateBody)
     const { name, query, sort } = req.validatedBody;
 
     const doc = await SavedSearch.findOneAndUpdate(
       { orgId: req.auth.org.orgId, name },
-      { $set: { query, sort, createdBy: req.auth.userId } },
+      {
+        $set: {
+          query,
+          sort: sort || { timestamp: -1 }, // ✅ fallback default
+          createdBy: req.auth.userId,
+        },
+      },
       { new: true, upsert: true }
     );
 

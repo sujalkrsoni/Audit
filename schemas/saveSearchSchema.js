@@ -2,7 +2,8 @@
 import { z } from "zod";
 
 export const saveSearchSchema = z.object({
+  orgId: z.string().min(1, "orgId is required"), // ✅ enforce org isolation
   name: z.string().min(1, "Name is required"),
-  query: z.object({}).catchall(z.any({})),
-  sort: z.object({}).catchall(z.any({})).optional(),
+  query: z.record(z.any()), // flexible query object
+  sort: z.record(z.any()).optional(),
 });

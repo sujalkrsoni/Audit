@@ -21,19 +21,27 @@ export const listLogsSchema = z.object({
   userEmail: z.string().optional(),
   eventType: z.string().optional(),
   resource: z.string().optional(),
-  start: z.string().datetime().optional(),
-  end: z.string().datetime().optional(),
-  q: z.string().optional(),
-  contains: z.string().optional(),
-  fuzzy: z.string().optional(), // "true" | "false"
+
+  // Date range filters
+  start: z.coerce.date().optional(),
+  end: z.coerce.date().optional(),
+
+  // Search filters
+  q: z.string().optional(), // full-text search
+  contains: z.string().optional(), // regex/fuzzy search
+  fuzzy: z.enum(["true", "false"]).optional(), // restrict values
+  operator: z.enum(["AND", "OR"]).default("AND"), // 🔑 Added operator support
+
+  // Sorting & pagination
   sortBy: z.enum(["timestamp", "eventType", "userId", "userEmail"]).optional(),
   order: z.enum(["asc", "desc"]).optional(),
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
+
+  // Cursor pagination
   after: z.string().optional(),
   before: z.string().optional(),
 });
-
 
 export const saveSearchSchema = z.object({
   name: z.string().min(1, "name is required"),

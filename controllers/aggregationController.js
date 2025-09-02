@@ -14,7 +14,7 @@ export async function countByEventType(req, res, next) {
       { $sort: { count: -1 } },
     ]);
 
-    res.json(results.map(r => ({ eventType: r._id, count: r.count })));
+    res.json(results.map(r => ({ eventType: r._id, count: r.count, data : r })));
   } catch (err) {
     next(err);
   }

@@ -1,16 +1,18 @@
 import mongoose from "mongoose";
 
-export function buildLogQuery({ orgId, params = {} }) {
+export function buildLogQuery({ orgId, params = {}, operator = "AND" }) {
   const { userId, userEmail, eventType, resource, start, end, q, contains, fuzzy } = params;
-  const and = [{ orgId }];
 
-  if (userId) and.push({ userId });
-  if (userEmail) and.push({ userEmail: new RegExp(escapeRegex(userEmail), "i") });
-  if (eventType) and.push({ eventType: new RegExp(`^${escapeRegex(eventType)}$`, "i") });
-  if (resource) and.push({ resource: new RegExp(escapeRegex(resource), "i") });
+  // ✅ sabse pehle ensure orgId condition
+  const base = [{ orgId }];
+
+  if (userId) base.push({ userId });
+  if (userEmail) base.push({ userEmail: new RegExp(escapeRegex(userEmail), "i") });
+  if (eventType) base.push({ eventType: new RegExp(`^${escapeRegex(eventType)}$`, "i") });
+  if (resource) base.push({ resource: new RegExp(escapeRegex(resource), "i") });
 
   if (start || end) {
-    and.push({
+    base.push({
       timestamp: {
         ...(start ? { $gte: new Date(start) } : {}),
         ...(end ? { $lte: new Date(end) } : {}),
@@ -20,7 +22,7 @@ export function buildLogQuery({ orgId, params = {} }) {
 
   if (contains) {
     const r = fuzzy === "true" ? buildFuzzyRegex(contains) : new RegExp(escapeRegex(contains), "i");
-    and.push({
+    base.push({
       $or: [
         { description: r },
         { eventType: r },
@@ -31,9 +33,13 @@ export function buildLogQuery({ orgId, params = {} }) {
     });
   }
 
-  if (q) and.push({ $text: { $search: q } });
+  if (q) {
+    base.push({ $text: { $search: q } });
+  }
 
-  return and.length ? { $and: and } : {};
+  // ✅ handle AND/OR operator
+  if (base.length === 0) return {};
+  return operator === "OR" ? { $or: base } : { $and: base };
 }
 
 export function buildSort({ sortBy = "timestamp", order = "desc" }) {
@@ -55,6 +61,7 @@ export function buildPagination({ page = 1, limit = 20, after, before }) {
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
 function buildFuzzyRegex(input) {
   const pattern = input.split("").map((ch) => escapeRegex(ch)).join(".*");
   return new RegExp(pattern, "i");

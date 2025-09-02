@@ -6,7 +6,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import pinoHttp from "pino-http";
 
-import { connectDB } from "./config/db.js";
 import { env } from "./config/validateEnv.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import logger from "./utils/logger.js";
@@ -17,9 +16,6 @@ import authRoutes from "./routes/authRoutes.js";
 import logRoutes from "./routes/logRoutes.js";
 import savedSearchRoutes from "./routes/savedSearchRoutes.js";
 import aggregationRoutes from "./routes/aggregationRoutes.js"; // ✅ NEW
-
-// connect to MongoDB before starting app
-await connectDB();
 
 const app = express();
 

@@ -1,4 +1,5 @@
 // routes/savedSearchRoutes.js
+
 import { Router } from "express";
 import { requireAuth } from "../middlewares/authMiddleware.js";
 import { perOrgRateLimit } from "../middlewares/rateLimit.js";
@@ -9,7 +10,7 @@ import {
   deleteSavedSearch,
 } from "../controllers/savedSearchController.js";
 import { validateBody } from "../middlewares/validate.js";
-import { saveSearchSchema } from "../schemas/saveSearchSchema.js"; // ⬅️ UPDATED IMPORT PATH
+import { saveSearchSchema } from "../utils/validators.js"; // ⬅️ Corrected path
 
 const router = Router();
 

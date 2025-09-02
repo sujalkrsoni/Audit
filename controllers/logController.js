@@ -3,17 +3,26 @@ import LogEntry from "../models/LogEntry.js";
 import { buildLogQuery, buildSort } from "../services/queryService.js";
 import { detectAndNotifySuspiciousDeletes } from "../services/alertService.js";
 
-// Create a new log entry
+// ✅ Create a new log entry
 export async function createLog(req, res, next) {
   try {
-    const { org } = req.auth;
-    const { eventType, resource, description, metadata, timestamp, userId, userEmail } = req.body;
-    if (!eventType) throw createError(400, "eventType required");
+    const { orgId, userId: authUserId } = req.user;
+    const {
+      eventType,
+      resource,
+      description,
+      metadata,
+      timestamp,
+      userId,
+      userEmail,
+    } = req.body;
+
+    if (!eventType) throw createError(400, "eventType is required");
 
     const doc = await LogEntry.create({
-      orgId: org.orgId,
-      userId: userId || req.auth.userId,
-      userEmail,
+      orgId,
+      userId: userId || authUserId,
+      userEmail: userEmail || null,
       eventType,
       resource,
       description,
@@ -21,48 +30,88 @@ export async function createLog(req, res, next) {
       timestamp: timestamp ? new Date(timestamp) : new Date(),
     });
 
-    // fire-and-forget alert check
-    detectAndNotifySuspiciousDeletes(org.orgId).catch(() => {});
+    // Fire-and-forget alert check
+    detectAndNotifySuspiciousDeletes(orgId).catch(() => {});
     res.status(201).json({ data: doc });
   } catch (err) {
     next(err);
   }
 }
 
-// List logs with pagination
+// ✅ List logs (filters + cursor pagination + full-text + fuzzy search)
 export async function listLogs(req, res, next) {
   try {
-    const { org } = req.auth;
-    const { page = 1, limit = 10, sortBy = "timestamp", order = "desc", ...filters } =
-      req.validatedQuery; // ✅ use validatedQuery here
+    const { orgId } = req.user;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "timestamp",
+      order = "desc",
+      after, // cursor-based pagination
+      search, // full-text/fuzzy
+      operator = "AND",
+      ...filters
+    } = req.validatedQuery;
 
-    const query = buildLogQuery({ orgId: org.orgId, params: filters });
+    let query = buildLogQuery({
+      orgId,
+      params: filters,
+      operator,
+    });
+
+    // ✅ Full-text / fuzzy search
+    if (search) {
+      query.$or = [
+        { $text: { $search: search } },
+        { description: { $regex: search, $options: "i" } },
+        { metadataText: { $regex: search, $options: "i" } },
+      ];
+    }
+
     const sort = buildSort({ sortBy, order });
 
-    const options = {
+    // ✅ Cursor-based pagination
+    if (after) {
+      query._id = { $gt: after };
+      const docs = await LogEntry.find(query)
+        .sort(sort)
+        .limit(parseInt(limit, 10))
+        .lean();
+
+      return res.json({
+        data: docs,
+        nextCursor: docs.length > 0 ? docs[docs.length - 1]._id : null,
+      });
+    }
+
+    // ✅ Page/limit pagination (mongoose-paginate)
+    const result = await LogEntry.paginate(query, {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
       sort,
       lean: true,
-    };
+    });
 
-    const result = await LogEntry.paginate(query, options);
     res.json(result);
   } catch (err) {
     next(err);
   }
 }
 
-
-// Stats aggregation
+// ✅ Stats aggregation (eventType, uniqueUsers, topResources, timeSeries)
 export async function stats(req, res, next) {
   try {
-    const { org } = req.auth;
+    const { orgId } = req.user;
+    const { interval = "hour", ...params } = req.query;
 
-    // Safe deep clone
-    const safeParams = JSON.parse(JSON.stringify(req.query));
+    const match = buildLogQuery({
+      orgId,
+      params,
+    });
 
-    const match = buildLogQuery({ orgId: org.orgId, params: safeParams });
+    let dateTruncUnit = "hour";
+    if (interval === "day") dateTruncUnit = "day";
+    if (interval === "month") dateTruncUnit = "month";
 
     const pipeline = [
       { $match: match },
@@ -78,10 +127,12 @@ export async function stats(req, res, next) {
             { $sort: { count: -1 } },
             { $limit: 10 },
           ],
-          byHour: [
+          timeSeries: [
             {
               $group: {
-                _id: { $dateTrunc: { date: "$timestamp", unit: "hour" } },
+                _id: {
+                  $dateTrunc: { date: "$timestamp", unit: dateTruncUnit },
+                },
                 count: { $sum: 1 },
               },
             },
@@ -92,15 +143,23 @@ export async function stats(req, res, next) {
     ];
 
     const [result] = await LogEntry.aggregate(pipeline);
+
     res.json({
-      byEventType: result.byEventType.map((x) => ({ eventType: x._id || "unknown", count: x.count })),
+      byEventType: result.byEventType.map((x) => ({
+        eventType: x._id || "unknown",
+        count: x.count,
+      })),
       uniqueUsers: result.uniqueUsers[0]?.uniqueUsers || 0,
-      topResources: result.topResources.map((x) => ({ resource: x._id || "unknown", count: x.count })),
-      byHour: result.byHour.map((x) => ({ hour: x._id, count: x.count })),
+      topResources: result.topResources.map((x) => ({
+        resource: x._id || "unknown",
+        count: x.count,
+      })),
+      timeSeries: result.timeSeries.map((x) => ({
+        interval: x._id,
+        count: x.count,
+      })),
     });
   } catch (err) {
     next(err);
   }
 }
-
-
