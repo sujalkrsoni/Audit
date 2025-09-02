@@ -1,0 +1,36 @@
+{
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
+    "celebrate": "^15.0.3",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.18",
+    "dotenv": "^17.2.1",
+    "envalid": "^8.1.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "helmet": "^8.1.0",
+    "joi": "^18.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "mongoose": "^8.18.0",
+    "mongoose-paginate-v2": "^1.9.1",
+    "morgan": "^1.10.1",
+    "nodemailer": "^7.0.6",
+    "pino": "^9.9.0",
+    "pino-http": "^10.5.0",
+    "pino-pretty": "^13.1.1",
+    "zod": "^4.1.5"
+  },
+  "name": "audit",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
