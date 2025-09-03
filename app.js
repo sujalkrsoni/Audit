@@ -15,7 +15,6 @@ import healthRoutes from "./routes/healthRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import logRoutes from "./routes/logRoutes.js";
 import savedSearchRoutes from "./routes/savedSearchRoutes.js";
-import aggregationRoutes from "./routes/aggregationRoutes.js"; // ✅ NEW
 
 const app = express();
 
@@ -47,7 +46,6 @@ app.use("/health", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/logs", logRoutes);
 app.use("/api/v1/saved-searches", savedSearchRoutes);
-app.use("/api/v1/aggregations", aggregationRoutes); // ✅ NEW
 
 // centralized error handler
 app.use(errorHandler);

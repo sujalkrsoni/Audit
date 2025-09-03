@@ -10,7 +10,7 @@ import {
   deleteSavedSearch,
 } from "../controllers/savedSearchController.js";
 import { validateBody } from "../middlewares/validate.js";
-import { saveSearchSchema } from "../utils/validators.js"; // ⬅️ Corrected path
+import { saveSearchSchema } from "../utils/validators.js"; // ⬅️ Corrected the file name
 
 const router = Router();
 

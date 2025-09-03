@@ -30,7 +30,7 @@ export const listLogsSchema = z.object({
   q: z.string().optional(), // full-text search
   contains: z.string().optional(), // regex/fuzzy search
   fuzzy: z.enum(["true", "false"]).optional(), // restrict values
-  operator: z.enum(["AND", "OR"]).default("AND"), // 🔑 Added operator support
+  operator: z.enum(["AND", "OR"]).default("AND"),
 
   // Sorting & pagination
   sortBy: z.enum(["timestamp", "eventType", "userId", "userEmail"]).optional(),
@@ -45,6 +45,6 @@ export const listLogsSchema = z.object({
 
 export const saveSearchSchema = z.object({
   name: z.string().min(1, "name is required"),
-  query: z.record(z.any()), // allow any object for query
-  sort: z.record(z.any()).optional(),
+  query: z.object({}).catchall(z.any()),   // ✅ allow any keys/values
+  sort: z.object({}).catchall(z.any()).optional(), // ✅ allow any keys/values
 });

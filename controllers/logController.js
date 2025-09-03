@@ -1,7 +1,12 @@
+// controllers/logController.js
 import createError from "http-errors";
 import LogEntry from "../models/LogEntry.js";
 import { buildLogQuery, buildSort } from "../services/queryService.js";
 import { detectAndNotifySuspiciousDeletes } from "../services/alertService.js";
+
+function success(message, data = null, extra = {}) {
+  return { success: true, message, data, ...extra };
+}
 
 // ✅ Create a new log entry
 export async function createLog(req, res, next) {
@@ -32,7 +37,10 @@ export async function createLog(req, res, next) {
 
     // Fire-and-forget alert check
     detectAndNotifySuspiciousDeletes(orgId).catch(() => {});
-    res.status(201).json({ data: doc });
+
+    res
+      .status(201)
+      .json(success("Log entry created successfully", doc));
   } catch (err) {
     next(err);
   }
@@ -47,17 +55,13 @@ export async function listLogs(req, res, next) {
       limit = 10,
       sortBy = "timestamp",
       order = "desc",
-      after, // cursor-based pagination
-      search, // full-text/fuzzy
+      after,
+      search,
       operator = "AND",
       ...filters
     } = req.validatedQuery;
 
-    let query = buildLogQuery({
-      orgId,
-      params: filters,
-      operator,
-    });
+    let query = buildLogQuery({ orgId, params: filters, operator });
 
     // ✅ Full-text / fuzzy search
     if (search) {
@@ -78,13 +82,14 @@ export async function listLogs(req, res, next) {
         .limit(parseInt(limit, 10))
         .lean();
 
-      return res.json({
-        data: docs,
-        nextCursor: docs.length > 0 ? docs[docs.length - 1]._id : null,
-      });
+      return res.json(
+        success("Logs fetched successfully", docs, {
+          nextCursor: docs.length > 0 ? docs[docs.length - 1]._id : null,
+        })
+      );
     }
 
-    // ✅ Page/limit pagination (mongoose-paginate)
+    // ✅ Page/limit pagination
     const result = await LogEntry.paginate(query, {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
@@ -92,7 +97,20 @@ export async function listLogs(req, res, next) {
       lean: true,
     });
 
-    res.json(result);
+    res.json(
+      success("Logs fetched successfully", result.docs, {
+        pagination: {
+          totalDocs: result.totalDocs,
+          totalPages: result.totalPages,
+          page: result.page,
+          limit: result.limit,
+          hasNextPage: result.hasNextPage,
+          hasPrevPage: result.hasPrevPage,
+          nextPage: result.nextPage,
+          prevPage: result.prevPage,
+        },
+      })
+    );
   } catch (err) {
     next(err);
   }
@@ -104,10 +122,7 @@ export async function stats(req, res, next) {
     const { orgId } = req.user;
     const { interval = "hour", ...params } = req.query;
 
-    const match = buildLogQuery({
-      orgId,
-      params,
-    });
+    const match = buildLogQuery({ orgId, params });
 
     let dateTruncUnit = "hour";
     if (interval === "day") dateTruncUnit = "day";
@@ -130,9 +145,7 @@ export async function stats(req, res, next) {
           timeSeries: [
             {
               $group: {
-                _id: {
-                  $dateTrunc: { date: "$timestamp", unit: dateTruncUnit },
-                },
+                _id: { $dateTrunc: { date: "$timestamp", unit: dateTruncUnit } },
                 count: { $sum: 1 },
               },
             },
@@ -144,21 +157,23 @@ export async function stats(req, res, next) {
 
     const [result] = await LogEntry.aggregate(pipeline);
 
-    res.json({
-      byEventType: result.byEventType.map((x) => ({
-        eventType: x._id || "unknown",
-        count: x.count,
-      })),
-      uniqueUsers: result.uniqueUsers[0]?.uniqueUsers || 0,
-      topResources: result.topResources.map((x) => ({
-        resource: x._id || "unknown",
-        count: x.count,
-      })),
-      timeSeries: result.timeSeries.map((x) => ({
-        interval: x._id,
-        count: x.count,
-      })),
-    });
+    res.json(
+      success("Stats fetched successfully", {
+        byEventType: result.byEventType.map((x) => ({
+          eventType: x._id || "unknown",
+          count: x.count,
+        })),
+        uniqueUsers: result.uniqueUsers[0]?.uniqueUsers || 0,
+        topResources: result.topResources.map((x) => ({
+          resource: x._id || "unknown",
+          count: x.count,
+        })),
+        timeSeries: result.timeSeries.map((x) => ({
+          interval: x._id,
+          count: x.count,
+        })),
+      })
+    );
   } catch (err) {
     next(err);
   }
