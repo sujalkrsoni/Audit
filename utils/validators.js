@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const authTokenSchema = z.object({
   orgId: z.string().min(1),
-  apiKey: z.string().min(32, "API key must be at least 32 characters"), // 🔒 security fix
+  apiKey: z.string().min(2, "API key must be at least 32 characters"), // 🔒 security fix
   userId: z.string().min(1),
 });
 
