@@ -1,11 +1,31 @@
-// middlewares/authMiddleware.js
-import jwt from "jsonwebtoken";
 import createError from "http-errors";
 import Organization from "../models/Organization.js";
-import { signWithOrgSecret, verifyWithOrgSecret } from "../utils/tokenHelper.js";
-import { env } from "../config/validateEnv.js";
+import {
+  signWithOrgSecret,
+  verifyWithOrgSecret,
+  decodeToken,
+} from "../utils/tokenHelper.js";
+import { env } from "../config/validateEnv.js"; // ✅ keep only for JWT_DEFAULT_TTL
+import logger from "../utils/logger.js";
 
-// Issue token (login/auth)
+// In-memory org cache with TTL
+const orgCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function setOrgCache(org) {
+  orgCache.set(org.orgId, { org, expires: Date.now() + CACHE_TTL_MS });
+}
+
+function getOrgCache(orgId) {
+  const entry = orgCache.get(orgId);
+  if (entry && entry.expires > Date.now()) {
+    return entry.org;
+  }
+  orgCache.delete(orgId);
+  return null;
+}
+
+// ✅ Issue token (login/auth)
 export async function issueToken(req, res, next) {
   try {
     const { orgId, apiKey, userId, email } = req.body;
@@ -14,22 +34,25 @@ export async function issueToken(req, res, next) {
     if (!org) throw createError(401, "Invalid organization");
 
     const ok = await org.verifyApiKey(apiKey);
-    if (!ok) throw createError(401, "Invalid apiKey");
+    if (!ok) throw createError(401, "Invalid API key");
 
-    // payload me orgId + user info
     const token = signWithOrgSecret({
       org,
       payload: { orgId: org.orgId, userId, email },
       expiresIn: env.JWT_DEFAULT_TTL,
     });
 
-    res.json({ token, org: { orgId: org.orgId, name: org.name } });
+    res.json({
+      token,
+      org: { orgId: org.orgId, name: org.name },
+    });
   } catch (err) {
+    logger.error({ msg: "issueToken error", error: err.message });
     next(err);
   }
 }
 
-// Protect routes
+// ✅ Protect routes
 export async function requireAuth(req, _res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -38,34 +61,34 @@ export async function requireAuth(req, _res, next) {
     }
 
     const token = authHeader.split(" ")[1];
-
-    // Step 1: decode to get orgId
-    const decoded = jwt.decode(token);
+    const decoded = decodeToken(token);
     if (!decoded?.orgId) throw createError(401, "Invalid token payload");
 
-    // Step 2: find org & verify with its secret
-    const org = await Organization.findOne({ orgId: decoded.orgId });
-    if (!org) throw createError(401, "Organization not found");
+    let org = getOrgCache(decoded.orgId);
+    if (!org) {
+      org = await Organization.findOne({ orgId: decoded.orgId }).lean();
+      if (!org) throw createError(401, "Organization not found");
+      setOrgCache(org);
+    }
 
-    const payload = verifyWithOrgSecret(token, org.jwtSecret);
+    let payload;
+    try {
+      payload = verifyWithOrgSecret(token, org.jwtSecret);
+    } catch (err) {
+      logger.warn({ msg: "Token verification failed", error: err.message });
+      throw createError(401, "Unauthorized");
+    }
 
-    // Step 3: attach auth (canonical)
+    // ✅ Always attach consistent auth object
     req.auth = {
       org: { orgId: org.orgId, name: org.name },
       userId: payload.userId,
       email: payload.email,
     };
 
-    // 🔙 Backward-compat: kuch jagah pe req.user destructure ho raha tha
-    // taaki crash na ho, yeh bhi set kar dete hain
-    req.user = {
-      orgId: org.orgId,
-      userId: payload.userId,
-      email: payload.email,
-    };
-
     next();
   } catch (err) {
+    logger.error({ msg: "Auth middleware error", error: err.message });
     next(createError(401, "Unauthorized"));
   }
 }

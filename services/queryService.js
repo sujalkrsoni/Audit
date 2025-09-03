@@ -3,25 +3,28 @@ import mongoose from "mongoose";
 export function buildLogQuery({ orgId, params = {}, operator = "AND" }) {
   const { userId, userEmail, eventType, resource, start, end, q, contains, fuzzy } = params;
 
-  // ✅ sabse pehle ensure orgId condition
+  // ✅ Always enforce orgId
   const base = [{ orgId }];
 
-  if (userId) base.push({ userId });
-  if (userEmail) base.push({ userEmail: new RegExp(escapeRegex(userEmail), "i") });
-  if (eventType) base.push({ eventType: new RegExp(`^${escapeRegex(eventType)}$`, "i") });
-  if (resource) base.push({ resource: new RegExp(escapeRegex(resource), "i") });
+  if (userId) base.push({ userId: String(userId) }); // ✅ sanitize
+  if (userEmail) base.push({ userEmail: new RegExp(escapeRegex(String(userEmail)), "i") });
+  if (eventType) base.push({ eventType: new RegExp(`^${escapeRegex(String(eventType))}$`, "i") });
+  if (resource) base.push({ resource: new RegExp(escapeRegex(String(resource)), "i") });
 
   if (start || end) {
-    base.push({
-      timestamp: {
-        ...(start ? { $gte: new Date(start) } : {}),
-        ...(end ? { $lte: new Date(end) } : {}),
-      },
-    });
+    const range = {};
+    if (start && !isNaN(Date.parse(start))) range.$gte = new Date(start);
+    if (end && !isNaN(Date.parse(end))) range.$lte = new Date(end);
+    if (Object.keys(range).length) base.push({ timestamp: range });
   }
 
   if (contains) {
-    const r = fuzzy === "true" ? buildFuzzyRegex(contains) : new RegExp(escapeRegex(contains), "i");
+    const safeContains = sanitizeSearchTerm(contains);
+    const r =
+      fuzzy === "true"
+        ? buildFuzzyRegex(safeContains)
+        : new RegExp(escapeRegex(safeContains), "i");
+
     base.push({
       $or: [
         { description: r },
@@ -34,12 +37,13 @@ export function buildLogQuery({ orgId, params = {}, operator = "AND" }) {
   }
 
   if (q) {
-    base.push({ $text: { $search: q } });
+    const safeQ = sanitizeSearchTerm(q);
+    base.push({ $text: { $search: safeQ } });
   }
 
-  // ✅ handle AND/OR operator
-  if (base.length === 0) return {};
-  return operator === "OR" ? { $or: base } : { $and: base };
+  // ✅ handle AND/OR operator safely
+  const op = operator === "OR" ? "$or" : "$and";
+  return { [op]: base };
 }
 
 export function buildSort({ sortBy = "timestamp", order = "desc" }) {
@@ -58,11 +62,25 @@ export function buildPagination({ page = 1, limit = 20, after, before }) {
   return { limit: lim, skip, cursor };
 }
 
+// ✅ Escape regex meta characters
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// ✅ Sanitize search term to prevent ReDoS / injection
+function sanitizeSearchTerm(input) {
+  if (typeof input !== "string") throw new Error("Invalid search term");
+  if (input.length > 50) {
+    throw new Error("Search term too long (max 50 chars)");
+  }
+  return input;
+}
+
+// ✅ Fuzzy regex with lazy quantifier, limited input
 function buildFuzzyRegex(input) {
-  const pattern = input.split("").map((ch) => escapeRegex(ch)).join(".*");
+  if (input.length > 20) {
+    throw new Error("Fuzzy search term too long (max 20 chars)");
+  }
+  const pattern = input.split("").map((ch) => escapeRegex(ch)).join(".*?"); // lazy
   return new RegExp(pattern, "i");
 }

@@ -1,4 +1,3 @@
-// app.js
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -19,8 +18,26 @@ import savedSearchRoutes from "./routes/savedSearchRoutes.js";
 const app = express();
 
 // 🔒 security & basics
-app.use(helmet());
-app.use(cors());
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // configure per frontend if needed
+  })
+);
+
+// 🔐 CORS - allow only whitelisted origins
+const allowedOrigins = env.ALLOWED_ORIGINS?.split(",") || [];
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS policy violation"));
+      }
+    },
+  })
+);
+
 app.use(express.json({ limit: "1mb" }));
 
 // 📜 structured logging (replaces morgan)

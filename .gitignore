@@ -1,1 +1,46 @@
-node_modules
+# Node.js dependencies
+/node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage
+*.lcov
+
+# Build outputs
+dist
+build
+.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Env files (secrets)
+/.env
+.env.local
+.env.*.local
+
+# Cache
+.npm
+.eslintcache
+.cache
+.next
+out
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

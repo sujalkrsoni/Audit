@@ -11,6 +11,7 @@ const envSchema = z.object({
     .regex(/^mongodb(\+srv)?:\/\//, "Must be a valid MongoDB connection string"),
 
   // JWT
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters long"),
   JWT_DEFAULT_TTL: z.string().default("1h"),
 
   // SMTP
@@ -35,6 +36,17 @@ const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
   console.error("❌ Invalid environment variables:", parsed.error.flatten().fieldErrors);
   process.exit(1);
+}
+
+// Extra runtime check: no weak secrets in production
+if (parsed.success && parsed.data.NODE_ENV === "production") {
+  if (
+    parsed.data.JWT_SECRET === "secret" ||
+    parsed.data.JWT_SECRET.length < 32
+  ) {
+    console.error("❌ Weak JWT_SECRET is not allowed in production");
+    process.exit(1);
+  }
 }
 
 export const env = parsed.data;

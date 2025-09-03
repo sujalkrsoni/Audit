@@ -1,4 +1,3 @@
-// index.js
 import cluster from "cluster";
 import os from "os";
 import mongoose from "mongoose";
@@ -19,10 +18,21 @@ if (cluster.isPrimary) {
     cluster.fork();
   }
 
+  cluster.on("online", (worker) => {
+    logger.info(`✅ Worker ${worker.process.pid} started`);
+  });
+
   // Restart worker if it dies
-  cluster.on("exit", (worker) => {
-    logger.error(`❌ Worker ${worker.process.pid} died. Restarting...`);
+  cluster.on("exit", (worker, code, signal) => {
+    logger.error(
+      `❌ Worker ${worker.process.pid} died (code: ${code}, signal: ${signal}). Restarting...`
+    );
     cluster.fork();
+  });
+
+  // Catch unhandled promise rejections at primary level
+  process.on("unhandledRejection", (reason) => {
+    logger.error({ msg: "Unhandled Rejection in primary", reason });
   });
 
 } else {
@@ -32,14 +42,27 @@ if (cluster.isPrimary) {
       logger.info(`🚀 Worker ${process.pid} running on port ${PORT}`);
     });
 
-    // Graceful shutdown inside workers
     const shutdown = async () => {
       logger.warn(`👋 Worker ${process.pid} shutting down...`);
-      await mongoose.connection.close();
-      server.close(() => process.exit(0));
+      try {
+        await mongoose.connection.close();
+        server.close(() => process.exit(0));
+      } catch (err) {
+        logger.error({ msg: "Error during shutdown", error: err.message });
+        process.exit(1);
+      }
     };
 
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
+    process.on("beforeExit", shutdown);
+
+    process.on("unhandledRejection", (reason) => {
+      logger.error({ msg: "Unhandled Rejection in worker", reason });
+    });
+    process.on("uncaughtException", (err) => {
+      logger.error({ msg: "Uncaught Exception in worker", error: err.message, stack: err.stack });
+      shutdown();
+    });
   });
 }

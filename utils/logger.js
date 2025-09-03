@@ -4,6 +4,14 @@ const isProd = process.env.NODE_ENV === "production";
 
 const logger = pino({
   level: isProd ? "info" : "debug",
+  timestamp: pino.stdTimeFunctions.isoTime, // ✅ always readable timestamps
+  redact: {
+    paths: ["req.headers.authorization", "password", "apiKey"], // ✅ no secrets in logs
+    censor: "[REDACTED]",
+  },
+  serializers: {
+    err: pino.stdSerializers.err, // ✅ proper error stack logging
+  },
   transport: !isProd
     ? {
         target: "pino-pretty",
@@ -15,8 +23,5 @@ const logger = pino({
       }
     : undefined,
 });
-
-// ❌ Don’t attach `.on("error")` — pino streams don’t need it.
-// That handler was swallowing logs and surfacing “failed with status code 500”.
 
 export default logger;

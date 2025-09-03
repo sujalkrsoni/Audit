@@ -7,8 +7,13 @@ export const perOrgRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req, res) => {
-    // Prefer org-based key; fallback to IP
-    return req.auth?.org?.orgId || req.user?.orgId || ipKeyGenerator(req, res);
+    // ✅ enforce org-level rate limiting when authenticated
+    if (req.auth?.org?.orgId) {
+      return `org:${req.auth.org.orgId}`;
+    }
+
+    // ✅ fallback to IP-based limiting for unauthenticated requests
+    return `ip:${ipKeyGenerator(req, res)}`;
   },
   message: { error: "Too many requests, please try again later." },
 });
